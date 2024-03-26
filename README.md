@@ -3,7 +3,9 @@ A CNN for Embedded Object Detection and Semantic Segmentation
 
 This project is based upon [PyTorch-YOLOv3](https://github.com/eriklindernoren/PyTorch-YOLOv3) and will continuously be modified to our needs.
 
-**The current fork dissociates the detection and segmentation databases**, so you can train on a different segmentation and detection dataset.
+## The current fork dissociates the detection and segmentation databases
+
+You can train on a different segmentation and detection dataset.
 
 It has been adapted to a vine desease detection dataset detailed here: [Tardif et al.: An expertized grapevine disease image database including five grape varieties focused on Flavescence dorée and its confounding diseases, biotic and abiotic stresses](https://www.data-in-brief.com/article/S2352-3409(23)00349-9/pdf) in: Data in Brief 48 (2023)
 
