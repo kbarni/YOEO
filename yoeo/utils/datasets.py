@@ -116,7 +116,7 @@ class ListDataset(Dataset):
         except Exception:
             #print(f"Could not read label '{label_path}'.")
             #return
-            boxes=np.array()
+            boxes=np.zeros((1,5))
             haveboxes = False
 
         # ---------
@@ -130,7 +130,7 @@ class ListDataset(Dataset):
         except FileNotFoundError as e:
             #print(f"Could not load mask '{mask_path}'.")
             #return
-            mask = np.zeros((img.size(0),img.size[1],3),np.uint8)
+            mask = np.zeros((img.shape[0],img.shape[1],3),np.uint8)
             havemask = False
 
         # -----------
