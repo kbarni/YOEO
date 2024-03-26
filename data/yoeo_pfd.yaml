@@ -1,0 +1,9 @@
+detection:
+    - fd
+    - esca
+    - confond
+segmentation:
+    - background
+    - sarments
+    - gr_desech
+    - gr_sain
