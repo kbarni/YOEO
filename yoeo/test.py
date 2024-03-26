@@ -153,7 +153,7 @@ def _evaluate(model, dataloader, class_config, img_size, iou_thres, conf_thres, 
     else:
         secondary_metric = None
 
-    for _, imgs, bb_targets, mask_targets in tqdm.tqdm(dataloader, desc="Validating"):
+    for _, imgs, bb_targets, mask_targets, haveboxes, havemask in tqdm.tqdm(dataloader, desc="Validating"):
         # Extract labels
         labels += bb_targets[:, 1].tolist()
 

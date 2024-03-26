@@ -1,0 +1,3 @@
+train = /Data/yoeo_pfd/data/custom/train.txt
+valid = /Data/yoeo_pfd/data/custom/valid.txt
+names=data/yoeo_pfd.yaml

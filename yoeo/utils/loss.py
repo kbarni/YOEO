@@ -57,69 +57,73 @@ def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, eps=
 
 def compute_loss(combined_predictions, combined_targets, model):
     # Split seg and yolo stuff
-    yolo_targets, seg_targets = combined_targets
+    yolo_targets, seg_targets, haveboxes,havemasks = combined_targets
     yolo_predictions, seg_predictions = combined_predictions    # Check which device was used
     # Check which device was used
     device = yolo_targets.device
 
     # Segmentation loss
-    seg_loss = nn.CrossEntropyLoss()(seg_predictions[0], seg_targets).unsqueeze(0)
+    if seg_targets != []:
+        seg_loss = nn.CrossEntropyLoss()(seg_predictions[0], seg_targets).unsqueeze(0)
+        loss = seg_loss
 
-    # Add placeholder varables for the different losses
-    lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
+    # Detection loss
+    if yolo_targets != []:
+        # Add placeholder varables for the different losses
+        lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
 
-    # Build yolo targets
-    tcls, tbox, indices, anchors = build_targets(yolo_predictions, yolo_targets, model)  # targets
+        # Build yolo targets
+        tcls, tbox, indices, anchors = build_targets(yolo_predictions, yolo_targets, model)  # targets
 
-    # Define different loss functions classification
-    BCEcls = nn.BCEWithLogitsLoss(
-        pos_weight=torch.tensor([1.0], device=device))
-    BCEobj = nn.BCEWithLogitsLoss(
-        pos_weight=torch.tensor([1.0], device=device))
+        # Define different loss functions classification
+        BCEcls = nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor([1.0], device=device))
+        BCEobj = nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor([1.0], device=device))
 
-    # Calculate losses for each yolo layer
-    for layer_index, layer_predictions in enumerate(yolo_predictions):
-        # Get image ids, anchors, grid index i and j for each target in the current yolo layer
-        b, anchor, grid_j, grid_i = indices[layer_index]
-        # Build empty object target tensor with the same shape as the object prediction
-        tobj = torch.zeros_like(layer_predictions[..., 0], device=device)  # target obj
-        # Get the number of targets for this layer.
-        # Each target is a label box with some scaling and the association of an anchor box.
-        # Label boxes may be associated to 0 or multiple anchors. So they are multiple times or not at all in the targets.
-        num_targets = b.shape[0]
-        # Check if there are targets for this batch
-        if num_targets:
-            # Load the corresponding values from the predictions for each of the targets
-            ps = layer_predictions[b, anchor, grid_j, grid_i]
+        # Calculate losses for each yolo layer
+        for layer_index, layer_predictions in enumerate(yolo_predictions):
+            # Get image ids, anchors, grid index i and j for each target in the current yolo layer
+            b, anchor, grid_j, grid_i = indices[layer_index]
+            # Build empty object target tensor with the same shape as the object prediction
+            tobj = torch.zeros_like(layer_predictions[..., 0], device=device)  # target obj
+            # Get the number of targets for this layer.
+            # Each target is a label box with some scaling and the association of an anchor box.
+            # Label boxes may be associated to 0 or multiple anchors. So they are multiple times or not at all in the targets.
+            num_targets = b.shape[0]
+            # Check if there are targets for this batch
+            if num_targets:
+                # Load the corresponding values from the predictions for each of the targets
+                ps = layer_predictions[b, anchor, grid_j, grid_i]
 
-            # Regression of the box
-            # Apply sigmoid to xy offset predictions in each cell that has a target
-            pxy = ps[:, :2].sigmoid()
-            # Apply exponent to wh predictions and multiply with the anchor box that matched best with the label for each cell that has a target
-            pwh = torch.exp(ps[:, 2:4]) * anchors[layer_index]
-            # Build box out of xy and wh
-            pbox = torch.cat((pxy, pwh), 1)
-            # Calculate CIoU or GIoU for each target with the predicted box for its cell + anchor
-            iou = bbox_iou(pbox.T, tbox[layer_index], x1y1x2y2=False, CIoU=True)
-            # We want to minimize our loss so we and the best possible IoU is 1 so we take 1 - IoU and reduce it with a mean
-            lbox += (1.0 - iou).mean()  # iou loss
+                # Regression of the box
+                # Apply sigmoid to xy offset predictions in each cell that has a target
+                pxy = ps[:, :2].sigmoid()
+                # Apply exponent to wh predictions and multiply with the anchor box that matched best with the label for each cell that has a target
+                pwh = torch.exp(ps[:, 2:4]) * anchors[layer_index]
+                # Build box out of xy and wh
+                pbox = torch.cat((pxy, pwh), 1)
+                # Calculate CIoU or GIoU for each target with the predicted box for its cell + anchor
+                iou = bbox_iou(pbox.T, tbox[layer_index], x1y1x2y2=False, CIoU=True)
+                # We want to minimize our loss so we and the best possible IoU is 1 so we take 1 - IoU and reduce it with a mean
+                lbox += (1.0 - iou).mean()  # iou loss
 
-            # Classification of the objectness
-            # Fill our empty object target tensor with the IoU we just calculated for each target at the targets position
-            tobj[b, anchor, grid_j, grid_i] = iou.detach().clamp(0).type(tobj.dtype)  # Use cells with iou > 0 as object targets
+                # Classification of the objectness
+                # Fill our empty object target tensor with the IoU we just calculated for each target at the targets position
+                tobj[b, anchor, grid_j, grid_i] = iou.detach().clamp(0).type(tobj.dtype)  # Use cells with iou > 0 as object targets
 
-            # Classification of the class
-            # Check if we need to do a classification (number of classes > 1)
-            if ps.size(1) - 5 > 1:
-                # Hot one class encoding
-                t = torch.zeros_like(ps[:, 5:], device=device)  # targets
-                t[range(num_targets), tcls[layer_index]] = 1
-                # Use the tensor to calculate the BCE loss
-                lcls += BCEcls(ps[:, 5:], t)  # BCE
+                # Classification of the class
+                # Check if we need to do a classification (number of classes > 1)
+                if ps.size(1) - 5 > 1:
+                    # Hot one class encoding
+                    t = torch.zeros_like(ps[:, 5:], device=device)  # targets
+                    t[range(num_targets), tcls[layer_index]] = 1
+                    # Use the tensor to calculate the BCE loss
+                    lcls += BCEcls(ps[:, 5:], t)  # BCE
 
-        # Classification of the objectness the sequel
-        # Calculate the BCE loss between the on the fly generated target and the network prediction
-        lobj += BCEobj(layer_predictions[..., 4], tobj) # obj loss
+            # Classification of the objectness the sequel
+            # Calculate the BCE loss between the on the fly generated target and the network prediction
+            lobj += BCEobj(layer_predictions[..., 4], tobj) # obj loss
 
     # Scalaing of losses
     lbox *= 0.2

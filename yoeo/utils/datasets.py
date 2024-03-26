@@ -112,9 +112,12 @@ class ListDataset(Dataset):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 boxes = np.loadtxt(label_path).reshape(-1, 5)
+            haveboxes = True
         except Exception:
-            print(f"Could not read label '{label_path}'.")
-            return
+            #print(f"Could not read label '{label_path}'.")
+            #return
+            boxes=np.array()
+            haveboxes = False
 
         # ---------
         #  Segmentation Mask
@@ -123,9 +126,12 @@ class ListDataset(Dataset):
             mask_path = self.mask_files[index % len(self.img_files)].rstrip()
             # Load segmentation mask as numpy array
             mask = np.array(Image.open(mask_path).convert('RGB'))
+            havemask = True
         except FileNotFoundError as e:
-            print(f"Could not load mask '{mask_path}'.")
-            return
+            #print(f"Could not load mask '{mask_path}'.")
+            #return
+            mask = np.zeros((img.size(0),img.size[1],3),np.uint8)
+            havemask = False
 
         # -----------
         #  Transform
@@ -140,7 +146,7 @@ class ListDataset(Dataset):
                 raise e
                 return
 
-        return img_path, img, bb_targets, mask_targets
+        return img_path, img, bb_targets, mask_targets, haveboxes, havemask
 
     def collate_fn(self, batch):
         self.batch_count += 1
@@ -148,7 +154,7 @@ class ListDataset(Dataset):
         # Drop invalid images
         batch = [data for data in batch if data is not None]
 
-        paths, imgs, bb_targets, mask_targets = list(zip(*batch))
+        paths, imgs, bb_targets, mask_targets, haveboxes, havemask = list(zip(*batch))
 
         # Selects new image size every tenth batch
         if self.multiscale and self.batch_count % 10 == 0:
@@ -166,7 +172,10 @@ class ListDataset(Dataset):
         # Stack masks and drop the 2 duplicated channels
         mask_targets = torch.stack([resize(mask, self.img_size)[0] for mask in mask_targets]).long()
 
-        return paths, imgs, bb_targets, mask_targets
+        haveboxes_t = torch.Tensor(haveboxes)
+        havemask_t = torch.Tensor(havemask)
+
+        return paths, imgs, bb_targets, mask_targets, haveboxes_t, havemask_t
 
     def __len__(self):
         return len(self.img_files)

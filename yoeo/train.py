@@ -164,7 +164,7 @@ def run():
 
         model.train()  # Set model to training mode
 
-        for batch_i, (_, imgs, bb_targets, mask_targets) in enumerate(tqdm.tqdm(dataloader, desc=f"Training Epoch {epoch}")):
+        for batch_i, (_, imgs, bb_targets, mask_targets, haveboxes,havemasks) in enumerate(tqdm.tqdm(dataloader, desc=f"Training Epoch {epoch}")):
             batches_done = len(dataloader) * epoch + batch_i
 
             imgs = Variable(imgs.to(device, non_blocking=True))
@@ -173,7 +173,7 @@ def run():
 
             outputs = model(imgs)
 
-            loss, loss_components = compute_loss(outputs, (bb_targets, mask_targets), model)
+            loss, loss_components = compute_loss(outputs, (bb_targets, mask_targets,haveboxes,havemasks), model)
 
             loss.backward()
 

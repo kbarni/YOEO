@@ -1,3 +1,0 @@
-train=data/custom/train.txt
-valid=data/custom/valid.txt
-names=data/custom/yoeo_names.yaml
