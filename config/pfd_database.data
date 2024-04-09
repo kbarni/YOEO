@@ -1,3 +1,4 @@
-train = /Data/yoeo_pfd/data/custom/train.txt
-valid = /Data/yoeo_pfd/data/custom/valid.txt
+train = /Data/base_yoeo/mtrain.txt
+valid = /Data/base_yoeo/mvalid.txt
+test = /Data/base_yoeo/mtest.txt
 names=data/yoeo_pfd.yaml

@@ -1,8 +1,12 @@
 detection:
-    - ball
-    - goalpost
-    - robot
+    - FD leaf
+    - Confounding
+    - Symptomatic bunch
+    - Esca leaf
+    - Confounding+
+    - Other
 segmentation:
-    - background
-    - lines
-    - field
+    - Background
+    - Symptomatic shoots
+    - Symptomatic bunches
+    - Healthy bunches

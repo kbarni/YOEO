@@ -22,7 +22,7 @@ from yoeo.utils.class_config import ClassConfig
 from yoeo.utils.augmentations import AUGMENTATION_TRANSFORMS
 from yoeo.utils.transforms import DEFAULT_TRANSFORMS
 from yoeo.utils.parse_config import parse_data_config
-from yoeo.utils.loss import compute_loss
+from yoeo.utils.loss import compute_loss,unet_loss,yolo_loss
 from yoeo.test import _evaluate, _create_validation_data_loader
 
 from terminaltables import AsciiTable
@@ -30,7 +30,7 @@ from terminaltables import AsciiTable
 from torchsummary import summary
 
 
-def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_training=False):
+def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_training=False,is_detect=False,is_segment=False):
     """Creates a DataLoader for training.
 
     :param img_path: Path to file containing all paths to training images.
@@ -50,7 +50,7 @@ def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_traini
         img_path,
         img_size=img_size,
         multiscale=multiscale_training,
-        transform=AUGMENTATION_TRANSFORMS)
+        transform=AUGMENTATION_TRANSFORMS,is_detect=is_detect,is_segment=is_segment)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -95,8 +95,10 @@ def run():
 
     # Get data configuration
     data_config = parse_data_config(args.data)
-    train_path = data_config["train"]
-    valid_path = data_config["valid"]
+    unettrain_path = data_config["unettrain"]
+    unetvalid_path = data_config["unetvalid"]
+    yolotrain_path = data_config["yolotrain"]
+    yolovalid_path = data_config["yolovalid"]
 
     class_names = ClassNames.load_from(data_config["names"])
     class_config = ClassConfig.load_from(args.class_config, class_names)
@@ -120,16 +122,31 @@ def run():
     # #################
 
     # Load training dataloader
-    dataloader = _create_data_loader(
-        train_path,
+    yolodataloader = _create_data_loader(
+        yolotrain_path,
         mini_batch_size,
         model.hyperparams['height'],
         args.n_cpu,
-        args.multiscale_training)
+        args.multiscale_training,is)
 
     # Load validation dataloader
-    validation_dataloader = _create_validation_data_loader(
-        valid_path,
+    yolovalidation_dataloader = _create_validation_data_loader(
+        yolovalid_path,
+        mini_batch_size,
+        model.hyperparams['height'],
+        args.n_cpu)
+
+    # Load training dataloader
+    unetdataloader = _create_data_loader(
+        unettrain_path,
+        mini_batch_size,
+        model.hyperparams['height'],
+        args.n_cpu,
+        args.multiscale_training,)
+
+    # Load validation dataloader
+    unetvalidation_dataloader = _create_validation_data_loader(
+        unetvalid_path,
         mini_batch_size,
         model.hyperparams['height'],
         args.n_cpu)
@@ -158,22 +175,61 @@ def run():
     # skip epoch zero, because then the calculations for when to evaluate/checkpoint makes more intuitive sense
     # e.g. when you stop after 30 epochs and evaluate every 10 epochs then the evaluations happen after: 10,20,30
     # instead of: 0, 10, 20
+    batches_done=0
     for epoch in range(1, args.epochs+1):
 
         print("\n---- Training Model ----")
 
         model.train()  # Set model to training mode
 
-        for batch_i, (_, imgs, bb_targets, mask_targets, haveboxes,havemasks) in enumerate(tqdm.tqdm(dataloader, desc=f"Training Epoch {epoch}")):
-            batches_done = len(dataloader) * epoch + batch_i
+        for batch_i, (_, imgs, mask_targets) in enumerate(tqdm.tqdm(unetdataloader, desc=f"Training Epoch {epoch}")):
+            batches_done += 1
 
             imgs = Variable(imgs.to(device, non_blocking=True))
-            bb_targets = Variable(bb_targets.to(device), requires_grad=False)
             mask_targets = Variable(mask_targets.to(device=device), requires_grad=False)
 
             outputs = model(imgs)
 
-            loss, loss_components = compute_loss(outputs, (bb_targets, mask_targets,haveboxes,havemasks), model)
+            loss = unet_loss(outputs, mask_targets, model)
+
+            loss.backward()
+
+            ###############
+            # Run optimizer
+            ###############
+
+            if batches_done % model.hyperparams['subdivisions'] == 0:
+                # Adapt learning rate
+                # Get learning rate defined in cfg
+                lr = model.hyperparams['learning_rate']
+                if batches_done < model.hyperparams['burn_in']:
+                    # Burn in
+                    lr *= (batches_done / model.hyperparams['burn_in'])
+                else:
+                    # Set and parse the learning rate to the steps defined in the cfg
+                    for threshold, value in model.hyperparams['lr_steps']:
+                        if batches_done > threshold:
+                            lr *= value
+                # Log the learning rate
+                logger.scalar_summary("train/learning_rate", lr, batches_done)
+                # Set learning rate
+                for g in optimizer.param_groups:
+                    g['lr'] = lr
+
+                # Run optimizer
+                optimizer.step()
+                # Reset gradients
+                optimizer.zero_grad()
+
+        for batch_i, (_, imgs, bb_) in enumerate(tqdm.tqd(yolodataloader, desc=f"Training Epoch {epoch}")):
+            batches_done += 1
+
+            imgs = Variable(imgs.to(device, non_blocking=True))
+            mask_targets = Variable(mask_targets.to(device=device), requires_grad=False)
+
+            outputs = model(imgs)
+
+            loss = unet_loss(outputs, mask_targets, model)
 
             loss.backward()
 

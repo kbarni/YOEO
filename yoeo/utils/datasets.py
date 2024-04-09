@@ -30,6 +30,7 @@ def resize(image, size):
     return image
 
 
+
 class ImageFolder(Dataset):
     def __init__(self, folder_path, transform=None):
         self.files = sorted(glob.glob("%s/*.*" % folder_path))
@@ -57,7 +58,7 @@ class ImageFolder(Dataset):
 
 
 class ListDataset(Dataset):
-    def __init__(self, list_path, img_size=416, multiscale=True, transform=None):
+    def __init__(self, list_path, is_segment=True, is_detect=True, img_size=416, multiscale=True, transform=None):
         with open(list_path, "r") as file:
             self.img_files = file.readlines()
 
@@ -88,6 +89,8 @@ class ListDataset(Dataset):
         self.max_size = self.img_size + 3 * 32
         self.batch_count = 0
         self.transform = transform
+        self.is_segment=is_segment
+        self.is_detect=is_detect
 
     def __getitem__(self, index):
 
@@ -105,6 +108,7 @@ class ListDataset(Dataset):
         # ---------
         #  Label
         # ---------
+        if self.is
         try:
             label_path = self.label_files[index % len(self.img_files)].rstrip()
 
@@ -114,10 +118,8 @@ class ListDataset(Dataset):
                 boxes = np.loadtxt(label_path).reshape(-1, 5)
             haveboxes = True
         except Exception:
-            #print(f"Could not read label '{label_path}'.")
-            #return
-            boxes=np.zeros((1,5))
-            haveboxes = False
+            print(f"Could not read label '{label_path}'.")
+            return
 
         # ---------
         #  Segmentation Mask

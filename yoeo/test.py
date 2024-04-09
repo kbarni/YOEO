@@ -223,7 +223,7 @@ def _evaluate(model, dataloader, class_config, img_size, iou_thres, conf_thres, 
     return yolo_metrics_output, seg_class_ious, secondary_metric
 
 
-def _create_validation_data_loader(img_path, batch_size, img_size, n_cpu):
+def _create_validation_data_loader(img_path, batch_size, img_size, n_cpu, is_segment=False, is_detect=False):
     """
     Creates a DataLoader for validation.
 
@@ -238,7 +238,9 @@ def _create_validation_data_loader(img_path, batch_size, img_size, n_cpu):
     :return: Returns DataLoader
     :rtype: DataLoader
     """
-    dataset = ListDataset(img_path, img_size=img_size, multiscale=False, transform=DEFAULT_TRANSFORMS)
+    dataset = ListDataset(img_path, img_size=img_size, 
+                          multiscale=False, transform=DEFAULT_TRANSFORMS,
+                          is_detect=is_detect,is_segment=is_segment)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,

@@ -335,7 +335,16 @@ def load_model(model_path, weights_path=None):
     if weights_path:
         if weights_path.endswith(".pth"):
             # Load checkpoint weights
-            model.load_state_dict(torch.load(weights_path, map_location=device))
+            #model.load_state_dict(torch.load(weights_path, map_location=device))
+            print("Initializing network from saved statedict")
+            saved_statedict = torch.load(weights_path)
+            state_dict=model.state_dict()        
+            for layer_name,layer_tensor in saved_statedict.items():
+                if state_dict[layer_name].shape==layer_tensor.shape:
+                    print(" - Loading weights for layer "+layer_name)
+                    state_dict[layer_name]=layer_tensor
+                else:
+                    print(" X Ignoring layer "+layer_name)
         else:
             # Load darknet weights
             model.load_darknet_weights(weights_path)

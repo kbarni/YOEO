@@ -54,6 +54,50 @@ def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, eps=
     else:
         return iou  # IoU
 
+def yolo_loss(combined_predictions, yolo_targets, model):
+    yolo_predictions, seg_predictions = combined_predictions
+    device = yolo_targets.device
+
+    lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
+    tcls, tbox, indices, anchors = build_targets(yolo_predictions, yolo_targets, model)
+
+    BCEcls = nn.BCEWithLogitsLoss(
+        pos_weight=torch.tensor([1.0], device=device),reduce=False)
+    BCEobj = nn.BCEWithLogitsLoss(
+        pos_weight=torch.tensor([1.0], device=device),reduce=False)
+    # Calculate losses for each yolo layer
+    for layer_index, layer_predictions in enumerate(yolo_predictions):
+        b, anchor, grid_j, grid_i = indices[layer_index]
+        tobj = torch.zeros_like(layer_predictions[..., 0], device=device)
+        num_targets = b.shape[0]
+        if num_targets:
+            ps = layer_predictions[b, anchor, grid_j, grid_i]
+            pxy = ps[:, :2].sigmoid()
+            pwh = torch.exp(ps[:, 2:4]) * anchors[layer_index]
+            pbox = torch.cat((pxy, pwh), 1)
+            iou = bbox_iou(pbox.T, tbox[layer_index], x1y1x2y2=False, CIoU=True)
+            lbox += (1.0 - iou).mean()  # iou loss
+            tobj[b, anchor, grid_j, grid_i] = iou.detach().clamp(0).type(tobj.dtype)
+            if ps.size(1) - 5 > 1:
+                t = torch.zeros_like(ps[:, 5:], device=device)  # targets
+                t[range(num_targets), tcls[layer_index]] = 1
+                lcls += BCEcls(ps[:, 5:], t)  # BCE
+        lobj += BCEobj(layer_predictions[..., 4], tobj) # obj loss
+    
+    # Scalaing of losses
+    lbox *= 0.2
+    lobj *= 10.0
+    lcls *= 0.05
+
+    loss = lbox + lobj + lcls
+    return loss, to_cpu(torch.cat((lbox, lobj, lcls, loss)))
+
+def unet_loss(combined_predictions, seg_targets, model):
+    yolo_predictions, seg_predictions = combined_predictions
+    device = seg_targets.device
+    seg_loss = nn.CrossEntropyLoss()(seg_predictions[0], seg_targets).unsqueeze(0)
+    return seg_loss
+
 
 def compute_loss(combined_predictions, combined_targets, model):
     # Split seg and yolo stuff
@@ -75,11 +119,17 @@ def compute_loss(combined_predictions, combined_targets, model):
     print(havemasks.shape)
     """
 
+    seg_loss = torch.zeros(1, device=device)
     # Segmentation loss
     cel = nn.CrossEntropyLoss(reduce=False)(seg_predictions[0], seg_targets).unsqueeze(0)
-    for i,lossval in enumerate(cel):
+    print(f"Seg loss {cel.shape}")
+    celsum = torch.sum(cel,(2,3))
+    print(f"Seg loss {celsum.shape}")
+    for i,loss in enumerate(celsum[0]):
+        print(loss,havemasks[i])
         if havemasks[i]:
-            seg_loss += lossval
+            seg_loss += loss
+    print(f"Loss: {seg_loss[0]}")
 
     # Detection loss
     # Add placeholder varables for the different losses
@@ -94,6 +144,7 @@ def compute_loss(combined_predictions, combined_targets, model):
     BCEobj = nn.BCEWithLogitsLoss(
         pos_weight=torch.tensor([1.0], device=device),reduce=False)
 
+    
     # Calculate losses for each yolo layer
     for layer_index, layer_predictions in enumerate(yolo_predictions):
         # Get image ids, anchors, grid index i and j for each target in the current yolo layer
@@ -134,6 +185,7 @@ def compute_loss(combined_predictions, combined_targets, model):
                 # Use the tensor to calculate the BCE loss
                 #lcls += BCEcls(ps[:, 5:], t)  # BCE
                 bcec = BCEcls(ps[:, 5:], t)
+                print(f"Class BCE {bcec.shape}")
                 for i,lossval in enumerate(bcec):
                     if haveboxes[i]:
                         lbox += lossval
@@ -141,10 +193,11 @@ def compute_loss(combined_predictions, combined_targets, model):
         # Classification of the objectness the sequel
         # Calculate the BCE loss between the on the fly generated target and the network prediction
         bceo = BCEobj(layer_predictions[..., 4], tobj) # obj loss
+        print(f"Object BCE {bceo.shape}")
         for i,lossval in enumerate(bceo):
             if haveboxes[i]:
                 lbox += lossval
-
+    
     # Scalaing of losses
     lbox *= 0.2
     lobj *= 10.0
