@@ -33,3 +33,19 @@ AUGMENTATION_TRANSFORMS = transforms.Compose([
     RelativeLabels(),
     ToTensor(),
 ])
+
+YOLO_TRANSFORMS = transforms.Compose([
+    AbsoluteLabels(),
+    DefaultAug(),
+    PadSquare(),
+    RelativeLabels(),
+    ToTensor(),
+])
+
+UNET_TRANSFORMS = transforms.Compose([
+    AbsoluteLabels(),
+    DefaultAug(),
+    PadSquare(),
+    RelativeLabels(),
+    ToTensor(),
+])

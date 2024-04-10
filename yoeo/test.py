@@ -53,7 +53,7 @@ def evaluate_model_file(model_path, weights_path, img_path, class_config, batch_
     :return: Returns precision, recall, AP, f1, ap_class
     """
     dataloader = _create_validation_data_loader(
-        img_path, batch_size, img_size, n_cpu)
+        img_path, batch_size, img_size, n_cpu,is_segment=True)
     model = load_model(model_path, weights_path)
     metrics_output, seg_class_ious, secondary_metric = _evaluate(
         model,

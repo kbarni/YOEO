@@ -95,6 +95,7 @@ def yolo_loss(combined_predictions, yolo_targets, model):
 def unet_loss(combined_predictions, seg_targets, model):
     yolo_predictions, seg_predictions = combined_predictions
     device = seg_targets.device
+    #print(f"*** Running Cross Entropy Loss ***\n -> Predictions size: {seg_predictions[0].shape}\n -> Ground truth size: {seg_targets.shape}")
     seg_loss = nn.CrossEntropyLoss()(seg_predictions[0], seg_targets).unsqueeze(0)
     return seg_loss
 

@@ -6,6 +6,7 @@ import random
 import os
 import warnings
 import numpy as np
+from io import StringIO
 from PIL import Image
 from PIL import ImageFile
 
@@ -108,32 +109,36 @@ class ListDataset(Dataset):
         # ---------
         #  Label
         # ---------
-        if self.is
-        try:
-            label_path = self.label_files[index % len(self.img_files)].rstrip()
+        if self.is_detect:
+            try:
+                label_path = self.label_files[index % len(self.img_files)].rstrip()
 
-            # Ignore warning if file is empty
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                boxes = np.loadtxt(label_path).reshape(-1, 5)
-            haveboxes = True
-        except Exception:
-            print(f"Could not read label '{label_path}'.")
-            return
+                # Ignore warning if file is empty
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    boxes = np.loadtxt(label_path).reshape(-1, 5)
+            except Exception:
+                print(f"Could not read label '{label_path}'.")
+                return
+        else:
+            boxes = np.loadtxt(StringIO("0 0 0 0 0\n0 0 0 0 0"))
 
         # ---------
         #  Segmentation Mask
         # ---------
-        try:
-            mask_path = self.mask_files[index % len(self.img_files)].rstrip()
-            # Load segmentation mask as numpy array
-            mask = np.array(Image.open(mask_path).convert('RGB'))
-            havemask = True
-        except FileNotFoundError as e:
-            #print(f"Could not load mask '{mask_path}'.")
-            #return
-            mask = np.zeros((img.shape[0],img.shape[1],3),np.uint8)
-            havemask = False
+        if self.is_segment:
+            try:
+                mask_path = self.mask_files[index % len(self.img_files)].rstrip()
+                # Load segmentation mask as numpy array
+                mask = np.array(Image.open(mask_path).convert('RGB'))
+                max = np.max(mask)
+                print(f"Loading {mask_path} Max: {max}")
+            except FileNotFoundError as e:
+                print(f"Could not load mask '{mask_path}'.")
+                return
+        else:
+            mask = np.zeros(img.shape(),dtype=np.uint8)
+
 
         # -----------
         #  Transform
@@ -148,7 +153,7 @@ class ListDataset(Dataset):
                 raise e
                 return
 
-        return img_path, img, bb_targets, mask_targets, haveboxes, havemask
+        return img_path, img, bb_targets, mask_targets
 
     def collate_fn(self, batch):
         self.batch_count += 1
@@ -156,7 +161,7 @@ class ListDataset(Dataset):
         # Drop invalid images
         batch = [data for data in batch if data is not None]
 
-        paths, imgs, bb_targets, mask_targets, haveboxes, havemask = list(zip(*batch))
+        paths, imgs, bb_targets, mask_targets = list(zip(*batch))
 
         # Selects new image size every tenth batch
         if self.multiscale and self.batch_count % 10 == 0:
@@ -174,10 +179,7 @@ class ListDataset(Dataset):
         # Stack masks and drop the 2 duplicated channels
         mask_targets = torch.stack([resize(mask, self.img_size)[0] for mask in mask_targets]).long()
 
-        haveboxes_t = torch.Tensor(haveboxes)
-        havemask_t = torch.Tensor(havemask)
-
-        return paths, imgs, bb_targets, mask_targets, haveboxes_t, havemask_t
+        return paths, imgs, bb_targets, mask_targets
 
     def __len__(self):
         return len(self.img_files)

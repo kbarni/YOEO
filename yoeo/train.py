@@ -103,7 +103,7 @@ def run():
     class_names = ClassNames.load_from(data_config["names"])
     class_config = ClassConfig.load_from(args.class_config, class_names)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ############
     # Create model
@@ -127,14 +127,14 @@ def run():
         mini_batch_size,
         model.hyperparams['height'],
         args.n_cpu,
-        args.multiscale_training,is)
+        args.multiscale_training,is_detect=True)
 
     # Load validation dataloader
     yolovalidation_dataloader = _create_validation_data_loader(
         yolovalid_path,
         mini_batch_size,
         model.hyperparams['height'],
-        args.n_cpu)
+        args.n_cpu,is_detect=True)
 
     # Load training dataloader
     unetdataloader = _create_data_loader(
@@ -142,14 +142,14 @@ def run():
         mini_batch_size,
         model.hyperparams['height'],
         args.n_cpu,
-        args.multiscale_training,)
+        args.multiscale_training,is_segment=True)
 
     # Load validation dataloader
     unetvalidation_dataloader = _create_validation_data_loader(
         unetvalid_path,
         mini_batch_size,
         model.hyperparams['height'],
-        args.n_cpu)
+        args.n_cpu,is_segment=True)
 
     # ################
     # Create optimizer
@@ -176,13 +176,16 @@ def run():
     # e.g. when you stop after 30 epochs and evaluate every 10 epochs then the evaluations happen after: 10,20,30
     # instead of: 0, 10, 20
     batches_done=0
+
+    #print(model)
+
     for epoch in range(1, args.epochs+1):
 
         print("\n---- Training Model ----")
 
         model.train()  # Set model to training mode
 
-        for batch_i, (_, imgs, mask_targets) in enumerate(tqdm.tqdm(unetdataloader, desc=f"Training Epoch {epoch}")):
+        for batch_i, (_, imgs, bb_targets, mask_targets) in enumerate(tqdm.tqdm(unetdataloader, desc=f"Training Epoch {epoch}")):
             batches_done += 1
 
             imgs = Variable(imgs.to(device, non_blocking=True))
@@ -221,15 +224,17 @@ def run():
                 # Reset gradients
                 optimizer.zero_grad()
 
-        for batch_i, (_, imgs, bb_) in enumerate(tqdm.tqd(yolodataloader, desc=f"Training Epoch {epoch}")):
+            model.seen += imgs.size(0)
+
+        for batch_i, (_, imgs, bb_) in enumerate(tqdm.tqdm(yolodataloader, desc=f"Training Epoch {epoch}")):
             batches_done += 1
 
             imgs = Variable(imgs.to(device, non_blocking=True))
-            mask_targets = Variable(mask_targets.to(device=device), requires_grad=False)
+            bb_targets = Variable(bb_targets.to(device=device), requires_grad=False)
 
             outputs = model(imgs)
 
-            loss = unet_loss(outputs, mask_targets, model)
+            loss = yolo_loss(outputs, bb_targets, model)
 
             loss.backward()
 

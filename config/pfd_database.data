@@ -1,4 +1,7 @@
-train = /Data/base_yoeo/mtrain.txt
-valid = /Data/base_yoeo/mvalid.txt
-test = /Data/base_yoeo/mtest.txt
+unettrain = /Data/base_yoeo/mtrain.txt
+unetvalid = /Data/base_yoeo/mvalid.txt
+unettest = /Data/base_yoeo/mtest.txt
+yolotrain = /Data/base_yoeo/dtrain.txt
+yolovalid = /Data/base_yoeo/dvalid.txt
+yolotest = /Data/base_yoeo/dtest.txt
 names=data/yoeo_pfd.yaml
