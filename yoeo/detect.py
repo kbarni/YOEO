@@ -154,7 +154,7 @@ def detect(model,
     os.makedirs(output_path, exist_ok=True)
 
     model.eval()  # Set model to evaluation mode
-
+    
     Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
     img_detections = []  # Stores detections for each image index

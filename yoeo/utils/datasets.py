@@ -110,10 +110,25 @@ class ListDataset(Dataset):
         #  Label
         # ---------
         if self.is_detect:
-            try:
-                label_path = self.label_files[index % len(self.img_files)].rstrip()
+            #try:
+            label_path = self.label_files[index % len(self.img_files)].rstrip()
+            # ------------------
+            #  Modified version
+            # ------------------
+            #boxlist = []
+            #with open(label_path,"r") as f:
+            #    for line in f:
+            #        sl = line.split(" ")
+            #        cl = float(sl[0])
+            #        cx = (float(sl[1])+float(sl[3]))/2
+            #        cy = (float(sl[2])+float(sl[6]))/2
+            #        w = float(sl[3])-float(sl[1])
+            #        h = float(sl[6])-float(sl[2])
+            #        boxlist.append([cl,cx,cy,w,h])
+            #boxes=np.array(boxlist).reshape(-1, 5)
 
-                # Ignore warning if file is empty
+            # Original
+            try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     boxes = np.loadtxt(label_path).reshape(-1, 5)
@@ -131,13 +146,13 @@ class ListDataset(Dataset):
                 mask_path = self.mask_files[index % len(self.img_files)].rstrip()
                 # Load segmentation mask as numpy array
                 mask = np.array(Image.open(mask_path).convert('RGB'))
-                max = np.max(mask)
-                print(f"Loading {mask_path} Max: {max}")
+                #max = np.max(mask)
+                #print(f"Loading {mask_path} Max: {max}")
             except FileNotFoundError as e:
                 print(f"Could not load mask '{mask_path}'.")
                 return
         else:
-            mask = np.zeros(img.shape(),dtype=np.uint8)
+            mask = np.zeros(img.shape,dtype=np.uint8)
 
 
         # -----------

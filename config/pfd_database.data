@@ -1,7 +1,7 @@
-unettrain = /Data/base_yoeo/mtrain.txt
-unetvalid = /Data/base_yoeo/mvalid.txt
-unettest = /Data/base_yoeo/mtest.txt
-yolotrain = /Data/base_yoeo/dtrain.txt
-yolovalid = /Data/base_yoeo/dvalid.txt
-yolotest = /Data/base_yoeo/dtest.txt
+unettrain = /home/barna/data/base_yoeo2/mtrain.txt
+unetvalid = /home/barna/data/base_yoeo2/mvalid.txt
+unettest = /home/barna/data/base_yoeo2/mtest.txt
+yolotrain = /home/barna/data/base_yoeo2/dtrain.txt
+yolovalid = /home/barna/data/base_yoeo2/dvalid.txt
+yolotest = /home/barna/data/base_yoeo2/dtest.txt
 names=data/yoeo_pfd.yaml

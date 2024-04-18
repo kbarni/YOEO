@@ -2,9 +2,9 @@ detection:
     - fd
     - esca
     - confond
+    - autre
 segmentation:
     - background
     - sarments
     - gr_desech
     - gr_sain
-    - bla

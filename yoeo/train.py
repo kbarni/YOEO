@@ -64,12 +64,13 @@ def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_traini
 
 def run():
     print_environment_info()
-    parser = argparse.ArgumentParser(description="Trains the YOLO model.")
+    parser = argparse.ArgumentParser(description="Trains the YOEO model.")
     parser.add_argument("-m", "--model", type=str, default="config/yoeo.cfg", help="Path to model definition file (.cfg)")
     parser.add_argument("-d", "--data", type=str, default="config/torso.data", help="Path to data config file (.data)")
     parser.add_argument("-e", "--epochs", type=int, default=300, help="Number of epochs")
     parser.add_argument("-v", "--verbose", action='store_true', help="Makes the training more verbose")
     parser.add_argument("--n_cpu", type=int, default=8, help="Number of cpu threads to use during batch generation")
+    parser.add_argument("--use_cpu", action='store_true', help="Force using CPU instead of GPU")
     parser.add_argument("--pretrained_weights", type=str, help="Path to checkpoint file (.weights or .pth). Starts training from checkpoint model")
     parser.add_argument("--checkpoint_interval", type=int, default=1, help="Interval of epochs between saving model weights")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints", help="Directory in which the checkpoints are stored")
@@ -103,13 +104,16 @@ def run():
     class_names = ClassNames.load_from(data_config["names"])
     class_config = ClassConfig.load_from(args.class_config, class_names)
 
-    device = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if args.use_cpu:
+        device = "cpu"
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ############
     # Create model
     # ############
 
-    model = load_model(args.model, args.pretrained_weights)
+    model = load_model(args.model, args.pretrained_weights,device=device)
 
     # Print model
     if args.verbose:
@@ -150,7 +154,32 @@ def run():
         mini_batch_size,
         model.hyperparams['height'],
         args.n_cpu,is_segment=True)
-
+    """
+    # ###########
+    # Check image
+    # ###########
+    import cv2
+    cv2.namedWindow("Image",cv2.WINDOW_NORMAL)
+    for i in range(1):
+        (path, imgs, bb_targets, mask_targets) = next(iter(yolodataloader))
+        print(path[0])
+        print(imgs[0].shape)
+        img = imgs[0].numpy().transpose(1, 2, 0).copy() #cv2.imread(path[0])
+        print(img.shape)
+        for box in bb_targets:
+            print(box)
+            w=img.shape[1]
+            h=img.shape[0]
+            x0=int((box[2]-box[4]/2)*w)
+            x1=int((box[2]+box[4]/2)*w)
+            y0=int((box[3]-box[5]/2)*h)
+            y1=int((box[3]+box[5]/2)*h)
+            print(f"{x0} {y0} {x1} {y1}")
+            cv2.rectangle(img,(x0,y0),(x1,y1),(1,0,0),2)
+        cv2.imshow("Image",img)
+        cv2.waitKey()
+    exit()
+    """
     # ################
     # Create optimizer
     # ################
@@ -185,7 +214,7 @@ def run():
 
         model.train()  # Set model to training mode
 
-        for batch_i, (_, imgs, bb_targets, mask_targets) in enumerate(tqdm.tqdm(unetdataloader, desc=f"Training Epoch {epoch}")):
+        for batch_i, (_, imgs, bb_targets, mask_targets) in enumerate(tqdm.tqdm(unetdataloader, desc=f"Training Epoch {epoch} / SEGM")):
             batches_done += 1
 
             imgs = Variable(imgs.to(device, non_blocking=True))
@@ -226,7 +255,7 @@ def run():
 
             model.seen += imgs.size(0)
 
-        for batch_i, (_, imgs, bb_) in enumerate(tqdm.tqdm(yolodataloader, desc=f"Training Epoch {epoch}")):
+        for batch_i, (_, imgs, bb_targets, mask_targets) in enumerate(tqdm.tqdm(yolodataloader, desc=f"Training Epoch {epoch} / YOLO")):
             batches_done += 1
 
             imgs = Variable(imgs.to(device, non_blocking=True))
@@ -234,7 +263,7 @@ def run():
 
             outputs = model(imgs)
 
-            loss = yolo_loss(outputs, bb_targets, model)
+            loss,loss_detail = yolo_loss(outputs, bb_targets, model)
 
             loss.backward()
 
@@ -265,6 +294,7 @@ def run():
                 # Reset gradients
                 optimizer.zero_grad()
 
+            """
             # ############
             # Log progress
             # ############
@@ -288,7 +318,7 @@ def run():
                 ("train/seg_loss", float(loss_components[3])),
                 ("train/loss", to_cpu(loss).item())]
             logger.list_of_scalars_summary(tensorboard_log, batches_done)
-
+            """
             model.seen += imgs.size(0)
 
         # #############
@@ -304,13 +334,13 @@ def run():
         # ########
         # Evaluate
         # ########
-
+"""
         if epoch % args.evaluation_interval == 0:
             print("\n---- Evaluating Model ----")
             # Evaluate the model on the validation set
             metrics_output = _evaluate(
                 model,
-                validation_dataloader,
+                yolovalidation_dataloader,
                 class_config=class_config,
                 img_size=model.hyperparams['height'],
                 iou_thres=args.iou_thres,
@@ -333,7 +363,7 @@ def run():
                     evaluation_metrics.append(("validation/secondary_mbACC", metrics_output[2].mbACC()))
 
                 logger.list_of_scalars_summary(evaluation_metrics, epoch)
-
+"""
 
 if __name__ == "__main__":
     run()

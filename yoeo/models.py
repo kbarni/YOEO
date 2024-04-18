@@ -243,6 +243,8 @@ class Darknet(nn.Module):
 
         ptr = 0
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
+            if ptr >= weights.length():
+                break
             if i == cutoff:
                 break
             if module_def["type"] == "convolutional":
@@ -314,7 +316,7 @@ class Darknet(nn.Module):
         fp.close()
 
 
-def load_model(model_path, weights_path=None):
+def load_model(model_path, weights_path=None,device="cpu"):
     """Loads the yolo model from file.
 
     :param model_path: Path to model definition file (.cfg)
@@ -324,8 +326,7 @@ def load_model(model_path, weights_path=None):
     :return: Returns model
     :rtype: Darknet
     """
-    device = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Select device for inference
-
+    
     model = Darknet(model_path).to(device)
 
     model.apply(weights_init_normal)
