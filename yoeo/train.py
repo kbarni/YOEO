@@ -211,7 +211,7 @@ def run():
     for epoch in range(1, args.epochs+1):
 
         print("\n---- Training Model ----")
-
+        seg_loss = iou_loss = obj_loss = cls_loss = total_loss = 0
         model.train()  # Set model to training mode
 
         for batch_i, (_, imgs, bb_targets, mask_targets) in enumerate(tqdm.tqdm(unetdataloader, desc=f"Training Epoch {epoch} / SEGM")):
@@ -223,6 +223,8 @@ def run():
             outputs = model(imgs)
 
             loss = unet_loss(outputs, mask_targets, model)
+            seg_loss += to_cpu(loss).item()
+            total_loss += to_cpu(loss).item()
 
             loss.backward()
 
@@ -264,7 +266,10 @@ def run():
             outputs = model(imgs)
 
             loss,loss_detail = yolo_loss(outputs, bb_targets, model)
-
+            iou_loss += float(loss_detail[0])
+            obj_loss += float(loss_detail[1])
+            cls_loss += float(loss_detail[2])
+            total_loss += to_cpu(loss).item()
             loss.backward()
 
             ###############
@@ -294,32 +299,38 @@ def run():
                 # Reset gradients
                 optimizer.zero_grad()
 
-            """
-            # ############
-            # Log progress
-            # ############
-            if args.verbose:
-                print(AsciiTable(
-                    [
-                        ["Type", "Value"],
-                        ["IoU loss", float(loss_components[0])],
-                        ["Object loss", float(loss_components[1])],
-                        ["Class loss", float(loss_components[2])],
-                        ["Segmentation loss", float(loss_components[3])],
-                        ["Loss", float(loss_components[4])],
-                        ["Batch loss", to_cpu(loss).item()],
-                    ]).table)
-
-            # Tensorboard logging
-            tensorboard_log = [
-                ("train/iou_loss", float(loss_components[0])),
-                ("train/obj_loss", float(loss_components[1])),
-                ("train/class_loss", float(loss_components[2])),
-                ("train/seg_loss", float(loss_components[3])),
-                ("train/loss", to_cpu(loss).item())]
-            logger.list_of_scalars_summary(tensorboard_log, batches_done)
-            """
             model.seen += imgs.size(0)
+
+        seg_loss /= unetdataloader.size()
+        iou_loss /= yolodataloader.size()
+        cls_loss /= yolodataloader.size()
+        obj_loss /= yolodataloader.size()
+        
+        # ############
+        # Log progress
+        # ############
+        if args.verbose:
+            print(AsciiTable(
+                [
+                    ["Type", "Value"],
+                    ["IoU loss", iou_loss],
+                    ["Object loss", obj_loss],
+                    ["Class loss", cls_loss],
+                    ["Segmentation loss", seg_loss],
+                    ["Epoch loss", to_cpu(loss).item()],
+                ]).table)
+        else:
+            print(f'Epoch loss: {total_loss}')
+        """
+        # Tensorboard logging
+        tensorboard_log = [
+            ("train/iou_loss", float(loss_components[0])),
+            ("train/obj_loss", float(loss_components[1])),
+            ("train/class_loss", float(loss_components[2])),
+            ("train/seg_loss", float(loss_components[3])),
+            ("train/loss", to_cpu(loss).item())]
+        logger.list_of_scalars_summary(tensorboard_log, batches_done)
+        """
 
         # #############
         # Save progress
@@ -334,7 +345,7 @@ def run():
         # ########
         # Evaluate
         # ########
-"""
+        """
         if epoch % args.evaluation_interval == 0:
             print("\n---- Evaluating Model ----")
             # Evaluate the model on the validation set
@@ -363,7 +374,11 @@ def run():
                     evaluation_metrics.append(("validation/secondary_mbACC", metrics_output[2].mbACC()))
 
                 logger.list_of_scalars_summary(evaluation_metrics, epoch)
-"""
+        """
+
+    print(f"****  Training finished   ****\n---- Saving network")
+    torch.save(model.state_dict,"weights/pfd_network_sd.pth")
+    torch.save(model,"weights/pfd_network.pth")
 
 if __name__ == "__main__":
     run()

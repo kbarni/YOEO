@@ -13,10 +13,10 @@ It has been adapted to a vine desease detection dataset detailed here: [Tardif e
 
 ## TODO
 
-- [ ] Load weights from Yolo or YOEO
+- [X] Load weights from Yolo or YOEO
 - [ ] Calculate/display loss
   - [ ] Create graph
-- [ ] Add parameters
+- [X] Add parameters
   - Load weights
   - Checkpoint frequency (default=10)
   - Checkpoint folder
